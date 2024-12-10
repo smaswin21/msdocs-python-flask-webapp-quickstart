@@ -6,7 +6,7 @@ param contName string
 param webappName string
 param contRegImage string
 
-module registry 'modules/contreg.bicep' = {
+module registry 'modules/registry.bicep' = {
   name: contName
   params: {
     name: contName
