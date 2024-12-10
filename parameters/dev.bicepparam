@@ -1,7 +1,7 @@
 using '../main.bicep'
 
 param AppserviceplanName = 'aswinasp'
-param contName = 'aswincontreg'
+param contName = 'aswincont'
 param webappName = 'aswinapp'
 param contRegImage = 'aswinimage'
 
@@ -22,6 +22,6 @@ param siteConfig  = {
   alwaysOn: true
   minTlsVersion: '1.2'
   ftpsState: 'FtpsOnly'
-  linuxFxVersion: 'DOCKER|aswincontreg.azurecr.io/aswinimage:latest'
+  linuxFxVersion: 'DOCKER|aswincont.azurecr.io/aswinimage:latest'
   appCommandLine: ''
 }
