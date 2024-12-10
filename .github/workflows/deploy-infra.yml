@@ -1,21 +1,32 @@
 name: deploy-dev
 
 on:
-    workflow_dispatch:
-    push:
-        branches:
-            - '*'
+  workflow_dispatch:
+  push:
+    branches:
+      - '*'
 
 env:
   RESOURCE_GROUP_DEV: BCSAI2024-DEVOPS-STUDENTS-B-DEV
   SUBSCRIPTION_ID_DEV: e0b9cada-61bc-4b5a-bd7a-52c606726b3b
 
-  
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Install Bicep CLI
+        run: |
+          curl -Lo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x ./bicep
+          sudo mv ./bicep /usr/local/bin/bicep
+          
       - name: Run Bicep linter
         run: az bicep build --file ./main.bicep 
 
@@ -27,14 +38,26 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+      
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Delete existing deployment
+        run: |
+          az deployment group cancel --name main --resource-group ${{ env.RESOURCE_GROUP_DEV }}
+        continue-on-error: true
+          
       - name: deploy
         uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ env.SUBSCRIPTION_ID_DEV }}
           resourceGroupName: ${{ env.RESOURCE_GROUP_DEV }}
           template: ./main.bicep
-          parameters: >
-            ./parameters/dev.bicepparam 
+          parameters: ./parameters/dev.bicepparam
+          deploymentName: 'main-${{ github.run_number }}'
+          failOnStdErr: false
+
+      - name: Logout from Azure
+        run: az logout
+        if: always()

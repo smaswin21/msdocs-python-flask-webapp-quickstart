@@ -35,6 +35,8 @@ var dockerAppSettings = {
   WEBSITES_ENABLE_APP_SERVICE_STORAGE: 'false'
 }
 
+
+
 resource webApp 'Microsoft.Web/sites@2022-03-01' = {
   name: name
   location: location

@@ -2,7 +2,7 @@ using '../main.bicep'
 
 param AppserviceplanName = 'aswinasp'
 param contName = 'aswincont'
-param webappName = 'aswin'
+param webappName = 'aswin_sm'
 param contRegImage = 'aswinimage'
 
 @description('Specifies the SKU for the App Service Plan.')

@@ -1,4 +1,3 @@
-
 param AppserviceplanName string 
 param kind string 
 param location string= resourceGroup().location
@@ -7,7 +6,7 @@ param contName string
 param webappName string
 param contRegImage string
 
-module registry 'modules/registry.bicep' = {
+module registry 'modules/contreg.bicep' = {
   name: contName
   params: {
     name: contName
@@ -26,7 +25,7 @@ module appServicePlan 'modules/asp.bicep' = {
 }
 param siteConfig object 
 
-module appSettings 'modules/webapp.bicep' = {
+module appSettings 'modules/web-app.bicep' = {
   name: webappName
   params: {
     location: location 
