@@ -6,6 +6,24 @@ param contName string
 param webappName string
 param contRegImage string
 
+
+module keyVault 'modules/key-vault.bicep' = {
+  name: 'aswinkv'
+  params: {
+    name: 'aswinkv'
+    location: location
+    enableVaultForDeployment: true
+    roleAssignments: [
+      {
+        principalId: 'c52bb0cc-7f22-4c28-aee8-264d1cafbb06'
+        roleDefinitionIdOrName: 'Key Vault Secrets User'
+        principalType: 'ServicePrincipal'
+      }
+    ]
+  }
+}
+
+
 module registry 'modules/registry.bicep' = {
   name: contName
   params: {

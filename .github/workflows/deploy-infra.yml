@@ -12,6 +12,9 @@ env:
   REGISTRY_LOGIN_SERVER: aswincont.azurecr.io
   IMAGE_BASE_NAME: aswinimage
   ACR_NAME: aswincont
+  KEY_VAULT_NAME: aswinkv
+  KEY_VAULT_SECRET_NAME_ACR_USERNAME: acr-username
+  KEY_VAULT_SECRET_NAME_ACR_PASSWORD: acr-password1
 
 permissions:
   id-token: write
@@ -40,13 +43,15 @@ jobs:
           template: ./main.bicep
           parameters: ./parameters/dev.bicepparam
 
-      # Login to Azure Container Registry
-      - name: Get ACR credentials
-        run: |
-          ACR_CREDS=$(az acr credential show --name ${{ env.ACR_NAME }})
-          echo "REGISTRY_USERNAME=$(echo $ACR_CREDS | jq -r .username)" >> $GITHUB_ENV
-          echo "REGISTRY_PASSWORD=$(echo $ACR_CREDS | jq -r '.passwords[0].value')" >> $GITHUB_ENV
+      # Get ACR credentials from Key Vault
+      - name: Get ACR credentials from Key Vault
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            echo "REGISTRY_USERNAME=$(az keyvault secret show --name ${{ env.KEY_VAULT_SECRET_NAME_ACR_USERNAME }} --vault-name ${{ env.KEY_VAULT_NAME }} --query value -o tsv)" >> $GITHUB_ENV
+            echo "REGISTRY_PASSWORD=$(az keyvault secret show --name ${{ env.KEY_VAULT_SECRET_NAME_ACR_PASSWORD }} --vault-name ${{ env.KEY_VAULT_NAME }} --query value -o tsv)" >> $GITHUB_ENV
 
+      # Login to Azure Container Registry using Key Vault secrets
       - name: Login to Azure Container Registry
         uses: azure/docker-login@v1
         with:
@@ -67,7 +72,7 @@ jobs:
           docker push ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:${{ steps.image-version.outputs.version }}
           docker push ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:latest
 
-      # Deploy to Azure Web App
+      # Deploy to Azure Web App using Key Vault secrets
       - uses: azure/webapps-deploy@v3
         with:
           app-name: 'aswinapp'
