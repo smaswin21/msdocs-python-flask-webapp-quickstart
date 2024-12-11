@@ -11,42 +11,36 @@ env:
   SUBSCRIPTION_ID_DEV: e0b9cada-61bc-4b5a-bd7a-52c606726b3b
   REGISTRY_LOGIN_SERVER: aswincont.azurecr.io
   IMAGE_BASE_NAME: aswinimage
-  ACR_NAME: aswinacr
+  ACR_NAME: aswincont
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  deploy-infrastructure:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: 'Development'
+
     steps:
       - uses: actions/checkout@v2
-
-      - name: Login via Azure CLI
-        uses: azure/login@v1
+      
+      # Azure Login
+      - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy Bicep
-        uses: azure/arm-deploy@v1
+      # Deploy Bicep infrastructure
+      - name: Deploy Infrastructure
+        uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ env.SUBSCRIPTION_ID_DEV }}
           resourceGroupName: ${{ env.RESOURCE_GROUP_DEV }}
           template: ./main.bicep
           parameters: ./parameters/dev.bicepparam
 
-  build-and-deploy:
-    needs: deploy-infrastructure
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Login via Azure CLI
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
+      # Login to Azure Container Registry
       - name: Get ACR credentials
         run: |
           ACR_CREDS=$(az acr credential show --name ${{ env.ACR_NAME }})
@@ -54,16 +48,18 @@ jobs:
           echo "REGISTRY_PASSWORD=$(echo $ACR_CREDS | jq -r '.passwords[0].value')" >> $GITHUB_ENV
 
       - name: Login to Azure Container Registry
-        uses: azure/docker-login@v2
+        uses: azure/docker-login@v1
         with:
           login-server: ${{ env.REGISTRY_LOGIN_SERVER }}
           username: ${{ env.REGISTRY_USERNAME }}
           password: ${{ env.REGISTRY_PASSWORD }}
-
+          
+      # Set image version
       - name: Set image version
         id: image-version
-        run: echo "version=$(date +'%Y.%m.%d.%H.%M')" >> $GITHUB_OUTPUT
+        run: echo "version=$(echo ${GITHUB_REF#refs/heads/})-$(date +'%Y.%m.%d.%H.%M')" >> $GITHUB_OUTPUT
 
+      # Build and push Docker image
       - name: Build and push image
         run: |
           docker build . -t ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:${{ steps.image-version.outputs.version }}
@@ -71,8 +67,8 @@ jobs:
           docker push ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:${{ steps.image-version.outputs.version }}
           docker push ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:latest
 
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
+      # Deploy to Azure Web App
+      - uses: azure/webapps-deploy@v3
         with:
           app-name: 'aswinapp'
           images: '${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:${{ steps.image-version.outputs.version }}'
