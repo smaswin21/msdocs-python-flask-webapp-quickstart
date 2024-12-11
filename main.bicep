@@ -1,58 +1,83 @@
-param AppserviceplanName string
+param appServicePlanName string
 param kind string
 param location string = resourceGroup().location
 param sku object
-param contName string
-param webappName string
-param siteConfig object
+param containerRegistryName string
+param containerRegistryImageName string
+param containerRegistryImageVersion string = 'latest'
+param keyVaultName string
+param webAppName string
+
+// hello
+// var adminUsernameSecretName = 'acrAdminUsername'
+// var adminPasswordSecretName = 'acrAdminPassword'
+param adminUsernameSecretName string 
+param adminPasswordSecretName string
 
 module keyVault 'modules/key-vault.bicep' = {
-  name: 'aswinkv'
+  name: keyVaultName
   params: {
-    name: 'aswinkv'
+    name: keyVaultName
     location: location
     enableVaultForDeployment: true
     roleAssignments: [
       {
-        principalId: 'c52bb0cc-7f22-4c28-aee8-264d1cafbb06'
+        principalId: '25d8d697-c4a2-479f-96e0-15593a830ae5'
         roleDefinitionIdOrName: 'Key Vault Secrets User'
         principalType: 'ServicePrincipal'
+      }
+      {
+        principalId: 'a03130df-486f-46ea-9d5c-70522fe056de' // Group.
+        roleDefinitionIdOrName: 'Key Vault Administrator'
+        principalType: 'Group'
       }
     ]
   }
 }
 
-module registry 'modules/registry.bicep' = {
-  name: contName
+module containerRegistry 'modules/registry.bicep' = {
+  name: '${containerRegistryName}-module'
   params: {
-    name: contName
+    name: containerRegistryName
     location: location
-    adminCredentialsKeyVaultResourceId: keyVault.outputs.keyVaultId
-    adminCredentialsKeyVaultSecretUserName: 'acr-username'
-    adminCredentialsKeyVaultSecretUserPassword1: 'acr-password1'
-    adminCredentialsKeyVaultSecretUserPassword2: 'acr-password2'
+    keyVaultResourceId: keyVault.outputs.resourceId
+    adminUsernameSecretName: adminUsernameSecretName
+    adminPasswordSecretName: adminPasswordSecretName
   }
+  dependsOn: [
+    keyVault 
+  ]  
 }
 
 module appServicePlan 'modules/asp.bicep' = {
-  name: AppserviceplanName
+  name: '${appServicePlanName}-module'
   params: {
-    name: AppserviceplanName
+    name: appServicePlanName
     kind: kind
     location: location
     sku: sku
   }
 }
 
+resource keyVaultReference 'Microsoft.KeyVault/vaults@2022-07-01'existing = {
+  name: keyVaultName
+}
+
 module webApp 'modules/web-app.bicep' = {
-  name: webappName
+  name: webAppName
   params: {
-    name: webappName
+    name: webAppName
     location: location
     appServicePlanId: appServicePlan.outputs.appServicePlanId
-    siteConfig: siteConfig
-    dockerRegistryServerUrl: 'https://${registry.outputs.loginServer}'
-    dockerRegistryServerUserName: keyVault.getSecret('acr-username')
-    dockerRegistryServerPassword: keyVault.getSecret('acr-password1')
+    containerRegistryName: containerRegistryName
+    containerRegistryImageName: containerRegistryImageName
+    containerRegistryImageVersion: containerRegistryImageVersion
+    dockerRegistryServerPassword: keyVaultReference.getSecret(adminPasswordSecretName)
+    dockerRegistryServerUserName: keyVaultReference.getSecret(adminUsernameSecretName)
+  
   }
+  dependsOn: [
+    containerRegistry
+    keyVault
+    ]
 }

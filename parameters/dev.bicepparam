@@ -1,12 +1,18 @@
 using '../main.bicep'
 
-param AppserviceplanName = 'aswinasp'
-param contName = 'aswincont'
-param webappName = 'aswinapp'
-param contRegImage = 'aswinimage'
+param appServicePlanName = 'aswinasp'
+param containerRegistryName = 'aswincont'
+param webAppName = 'aswinapp'
+param containerRegistryImageName = 'aswinimage'
+param keyVaultName = 'aswinkv'
+
+
+param adminUsernameSecretName = 'adminUsernameSecretName'
+param adminPasswordSecretName = 'adminPasswordSecretName0'
+
 
 @description('Specifies the SKU for the App Service Plan.')
-param sku  = {
+param sku = {
   capacity: 1
   family: 'B'
   name: 'B1'
@@ -15,13 +21,4 @@ param sku  = {
 }
 
 @description('The kind of App Service Plan (e.g., Linux).')
-param kind  = 'Linux'
-
-@description('Site configuration for the Web App.')
-param siteConfig  = {
-  alwaysOn: true
-  minTlsVersion: '1.2'
-  ftpsState: 'FtpsOnly'
-  linuxFxVersion: 'DOCKER|aswincont.azurecr.io/aswinimage:latest'
-  appCommandLine: ''
-}
+param kind = 'Linux'
