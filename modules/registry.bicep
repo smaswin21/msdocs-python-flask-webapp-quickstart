@@ -1,18 +1,16 @@
-metadata name = 'Azure Container Registries (ACR)'
-metadata description = 'This module deploys an Azure Container Registry (ACR).'
-metadata owner = 'Azure/module-maintainers'
-
-@description('Required. Name of your Azure Container Registry.')
-@minLength(5)
-@maxLength(50)
 param name string
-
-@description('Optional. Enable admin user that have push / pull permission to the registry.')
-param acrAdminUserEnabled bool = true
-
-@description('Optional. Location for all resources.')
 param location string = resourceGroup().location
+param adminCredentialsKeyVaultResourceId string
+@secure()
+param adminCredentialsKeyVaultSecretUserName string
+@secure()
+param adminCredentialsKeyVaultSecretUserPassword1 string
+@secure()
+param adminCredentialsKeyVaultSecretUserPassword2 string
 
+resource adminCredentialsKeyVault 'Microsoft.KeyVault/vaults@2022-07-01' existing = {
+  name: last(split(adminCredentialsKeyVaultResourceId, '/'))
+}
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-06-01-preview' = {
   name: name
@@ -21,13 +19,24 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-06-01-preview' = 
     name: 'Basic'
   }
   properties: {
-    adminUserEnabled: acrAdminUserEnabled
+    adminUserEnabled: true
   }
 }
 
-#disable-next-line outputs-should-not-contain-secrets
-var credentials = registry.listCredentials()
-#disable-next-line outputs-should-not-contain-secrets
-output adminUsername string = credentials.username
-#disable-next-line outputs-should-not-contain-secrets
-output adminPassword string = credentials.passwords[0].value
+resource secretUserName 'Microsoft.KeyVault/vaults/secrets@2022-07-01' = {
+  parent: adminCredentialsKeyVault
+  name: adminCredentialsKeyVaultSecretUserName
+  properties: {
+    value: registry.listCredentials().username
+  }
+}
+
+resource secretPassword1 'Microsoft.KeyVault/vaults/secrets@2022-07-01' = {
+  parent: adminCredentialsKeyVault
+  name: adminCredentialsKeyVaultSecretUserPassword1
+  properties: {
+    value: registry.listCredentials().passwords[0].value
+  }
+}
+
+output loginServer string = registry.properties.loginServer

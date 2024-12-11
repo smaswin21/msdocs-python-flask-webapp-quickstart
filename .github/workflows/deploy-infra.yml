@@ -29,12 +29,10 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       
-      # Azure Login
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Deploy Bicep infrastructure
       - name: Deploy Infrastructure
         uses: azure/arm-deploy@v2
         with:
@@ -43,7 +41,6 @@ jobs:
           template: ./main.bicep
           parameters: ./parameters/dev.bicepparam
 
-      # Get ACR credentials from Key Vault
       - name: Get ACR credentials from Key Vault
         uses: azure/CLI@v1
         with:
@@ -51,7 +48,6 @@ jobs:
             echo "REGISTRY_USERNAME=$(az keyvault secret show --name ${{ env.KEY_VAULT_SECRET_NAME_ACR_USERNAME }} --vault-name ${{ env.KEY_VAULT_NAME }} --query value -o tsv)" >> $GITHUB_ENV
             echo "REGISTRY_PASSWORD=$(az keyvault secret show --name ${{ env.KEY_VAULT_SECRET_NAME_ACR_PASSWORD }} --vault-name ${{ env.KEY_VAULT_NAME }} --query value -o tsv)" >> $GITHUB_ENV
 
-      # Login to Azure Container Registry using Key Vault secrets
       - name: Login to Azure Container Registry
         uses: azure/docker-login@v1
         with:
@@ -59,21 +55,7 @@ jobs:
           username: ${{ env.REGISTRY_USERNAME }}
           password: ${{ env.REGISTRY_PASSWORD }}
           
-      # Set image version
-      - name: Set image version
-        id: image-version
-        run: echo "version=$(echo ${GITHUB_REF#refs/heads/})-$(date +'%Y.%m.%d.%H.%M')" >> $GITHUB_OUTPUT
-
-      # Build and push Docker image
       - name: Build and push image
         run: |
-          docker build . -t ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:${{ steps.image-version.outputs.version }}
           docker build . -t ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:latest
-          docker push ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:${{ steps.image-version.outputs.version }}
           docker push ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:latest
-
-      # Deploy to Azure Web App using Key Vault secrets
-      - uses: azure/webapps-deploy@v3
-        with:
-          app-name: 'aswinapp'
-          images: '${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:${{ steps.image-version.outputs.version }}'

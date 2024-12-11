@@ -1,11 +1,10 @@
-param AppserviceplanName string 
-param kind string 
-param location string= resourceGroup().location
-param sku object 
+param AppserviceplanName string
+param kind string
+param location string = resourceGroup().location
+param sku object
 param contName string
 param webappName string
-param contRegImage string
-
+param siteConfig object
 
 module keyVault 'modules/key-vault.bicep' = {
   name: 'aswinkv'
@@ -23,12 +22,15 @@ module keyVault 'modules/key-vault.bicep' = {
   }
 }
 
-
 module registry 'modules/registry.bicep' = {
   name: contName
   params: {
     name: contName
     location: location
+    adminCredentialsKeyVaultResourceId: keyVault.outputs.keyVaultId
+    adminCredentialsKeyVaultSecretUserName: 'acr-username'
+    adminCredentialsKeyVaultSecretUserPassword1: 'acr-password1'
+    adminCredentialsKeyVaultSecretUserPassword2: 'acr-password2'
   }
 }
 
@@ -41,19 +43,16 @@ module appServicePlan 'modules/asp.bicep' = {
     sku: sku
   }
 }
-param siteConfig object 
 
-module appSettings 'modules/web-app.bicep' = {
+module webApp 'modules/web-app.bicep' = {
   name: webappName
   params: {
-    location: location 
-    appServicePlanId : appServicePlan.outputs.appServicePlanId  
-    siteConfig: siteConfig
-    dockerRegistryServerUserName: registry.outputs.adminUsername
-    dockerRegistryServerPassword: registry.outputs.adminPassword
-    containerRegistryImageName: contRegImage
-    containerRegistryName: contName
     name: webappName
-    
+    location: location
+    appServicePlanId: appServicePlan.outputs.appServicePlanId
+    siteConfig: siteConfig
+    dockerRegistryServerUrl: 'https://${registry.outputs.loginServer}'
+    dockerRegistryServerUserName: keyVault.getSecret('acr-username')
+    dockerRegistryServerPassword: keyVault.getSecret('acr-password1')
   }
 }
