@@ -1,4 +1,4 @@
-name: deploy-dev
+name: Deploy Azure Infrastructure and Application
 
 on:
   workflow_dispatch:
@@ -11,55 +11,59 @@ env:
   SUBSCRIPTION_ID_DEV: e0b9cada-61bc-4b5a-bd7a-52c606726b3b
   REGISTRY_LOGIN_SERVER: aswincont.azurecr.io
   IMAGE_BASE_NAME: aswinimage
-  KEY_VAULT_SECRET_NAME_ACR_USERNAME: acr-username
-  KEY_VAULT_SECRET_NAME_ACR_PASSWORD: acr-password
-  KEY_VAULT_NAME_DEV: myKeyVault
+  ACR_NAME: aswinacr
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
-  build-and-deploy:
+  deploy-infrastructure:
     runs-on: ubuntu-latest
-    environment:
-      name: 'Development'
-
     steps:
-      # Checkout repository code
       - uses: actions/checkout@v2
 
-      # Azure Login
-      - uses: azure/login@v2
+      - name: Login via Azure CLI
+        uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Deploy Bicep infrastructure
-      - name: Deploy Infrastructure
-        uses: azure/arm-deploy@v2
+      - name: Deploy Bicep
+        uses: azure/arm-deploy@v1
         with:
           subscriptionId: ${{ env.SUBSCRIPTION_ID_DEV }}
           resourceGroupName: ${{ env.RESOURCE_GROUP_DEV }}
           template: ./main.bicep
           parameters: ./parameters/dev.bicepparam
 
-      # Retrieve registry credentials from Azure Key Vault
-      - name: Get Docker registry credentials from Azure Key Vault
-        uses: azure/CLI@v1
-        with:
-          inlineScript: |
-            echo "REGISTRY_USERNAME=$(az keyvault secret show --name ${{ env.KEY_VAULT_SECRET_NAME_ACR_USERNAME }} --vault-name ${{ env.KEY_VAULT_NAME_DEV }} --query value -o tsv)" >> $GITHUB_ENV
-            echo "REGISTRY_PASSWORD=$(az keyvault secret show --name ${{ env.KEY_VAULT_SECRET_NAME_ACR_PASSWORD }} --vault-name ${{ env.KEY_VAULT_NAME_DEV }} --query value -o tsv)" >> $GITHUB_ENV
+  build-and-deploy:
+    needs: deploy-infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
 
-      # Login to Azure Container Registry
-      - uses: azure/docker-login@v2
+      - name: Login via Azure CLI
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get ACR credentials
+        run: |
+          ACR_CREDS=$(az acr credential show --name ${{ env.ACR_NAME }})
+          echo "REGISTRY_USERNAME=$(echo $ACR_CREDS | jq -r .username)" >> $GITHUB_ENV
+          echo "REGISTRY_PASSWORD=$(echo $ACR_CREDS | jq -r '.passwords[0].value')" >> $GITHUB_ENV
+
+      - name: Login to Azure Container Registry
+        uses: azure/docker-login@v2
         with:
           login-server: ${{ env.REGISTRY_LOGIN_SERVER }}
           username: ${{ env.REGISTRY_USERNAME }}
           password: ${{ env.REGISTRY_PASSWORD }}
 
-      # Set image version
       - name: Set image version
         id: image-version
         run: echo "version=$(date +'%Y.%m.%d.%H.%M')" >> $GITHUB_OUTPUT
 
-      # Build and push Docker image
       - name: Build and push image
         run: |
           docker build . -t ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:${{ steps.image-version.outputs.version }}
@@ -67,8 +71,8 @@ jobs:
           docker push ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:${{ steps.image-version.outputs.version }}
           docker push ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:latest
 
-      # Deploy to Azure Web App
-      - uses: azure/webapps-deploy@v3
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
         with:
           app-name: 'aswinapp'
           images: '${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_BASE_NAME }}:${{ steps.image-version.outputs.version }}'
