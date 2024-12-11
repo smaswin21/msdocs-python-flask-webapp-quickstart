@@ -1,17 +1,20 @@
 name: deploy-dev
 
 on:
-    workflow_dispatch:
-    push:
-        branches:
-            - '*'
+  workflow_dispatch:
+  push:
+    branches:
+      - '*'
 
 env:
   RESOURCE_GROUP_DEV: BCSAI2024-DEVOPS-STUDENTS-B-DEV
   SUBSCRIPTION_ID_DEV: e0b9cada-61bc-4b5a-bd7a-52c606726b3b
   REGISTRY_LOGIN_SERVER: aswincont.azurecr.io
   IMAGE_BASE_NAME: aswinimage
-  
+  KEY_VAULT_SECRET_NAME_ACR_USERNAME: acr-username
+  KEY_VAULT_SECRET_NAME_ACR_PASSWORD: acr-password
+  KEY_VAULT_NAME_DEV: myKeyVault
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -19,8 +22,9 @@ jobs:
       name: 'Development'
 
     steps:
+      # Checkout repository code
       - uses: actions/checkout@v2
-      
+
       # Azure Login
       - uses: azure/login@v2
         with:
@@ -35,18 +39,25 @@ jobs:
           template: ./main.bicep
           parameters: ./parameters/dev.bicepparam
 
+      # Retrieve registry credentials from Azure Key Vault
+      - name: Get Docker registry credentials from Azure Key Vault
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            echo "REGISTRY_USERNAME=$(az keyvault secret show --name ${{ env.KEY_VAULT_SECRET_NAME_ACR_USERNAME }} --vault-name ${{ env.KEY_VAULT_NAME_DEV }} --query value -o tsv)" >> $GITHUB_ENV
+            echo "REGISTRY_PASSWORD=$(az keyvault secret show --name ${{ env.KEY_VAULT_SECRET_NAME_ACR_PASSWORD }} --vault-name ${{ env.KEY_VAULT_NAME_DEV }} --query value -o tsv)" >> $GITHUB_ENV
+
       # Login to Azure Container Registry
       - uses: azure/docker-login@v2
         with:
           login-server: ${{ env.REGISTRY_LOGIN_SERVER }}
-          username: ${{ secrets.REGISTRY_USERNAME }} # or use ${{ env.REGISTRY_USERNAME }} if set above
-          password: ${{ secrets.REGISTRY_PASSWORD }} # or use ${{ env.REGISTRY_PASSWORD }} if set above
-
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ env.REGISTRY_PASSWORD }}
 
       # Set image version
       - name: Set image version
         id: image-version
-        run: echo "version=$(echo ${GITHUB_REF#refs/heads/})-$(date +'%Y.%m.%d.%H.%M')" >> $GITHUB_OUTPUT
+        run: echo "version=$(date +'%Y.%m.%d.%H.%M')" >> $GITHUB_OUTPUT
 
       # Build and push Docker image
       - name: Build and push image
